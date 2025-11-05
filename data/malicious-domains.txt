@@ -1,0 +1,8 @@
+# PhantomRaven Malicious Infrastructure
+# Source: https://www.koi.ai/blog/phantomraven-npm-malware-hidden-in-invisible-dependencies
+# Last Updated: 2025-11-04
+# Format: domain_or_ip
+
+# Known PhantomRaven C2 infrastructure
+packages.storeartifact.com
+54.173.15.59

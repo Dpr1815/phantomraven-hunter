@@ -1,0 +1,15 @@
+# Safe Domains Whitelist
+# These domains are allowed in RDD (Remote Dynamic Dependencies)
+# Last Updated: 2025-11-04
+# Format: domain
+
+# Version control hosting
+github.com
+gitlab.com
+bitbucket.org
+git.sr.ht
+
+# Package registries (these shouldn't appear in RDD anyway, but just in case)
+npmjs.com
+registry.npmjs.org
+registry.yarnpkg.com
