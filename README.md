@@ -221,7 +221,7 @@ All 126 packages from the PhantomRaven campaign:
 - `eslint-comments`
 - `transform-react-remove-prop-types`
 - `crowdstrike` (fake package, not the real security company!)
-- [See full list](MALICIOUS_PACKAGES.md)
+- [See full list](data/malicious-packages.txt)
 
 ### 3. Lifecycle Script Analysis
 
