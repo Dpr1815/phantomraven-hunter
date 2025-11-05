@@ -4,7 +4,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Shell Script](https://img.shields.io/badge/shell-bash-green.svg)](https://www.gnu.org/software/bash/)
-[![Tested on](https://img.shields.io/badge/tested%20on-ubuntu%20|%20debian%20)](https://github.com/dpr1815/phantomraven-hunter)
+[![Tested on](https://img.shields.io/badge/tested%20on-ubuntu%20|%20debian-blue.svg)](https://github.com/dpr1815/phantomraven-hunter)
 
 ## 🚨 What is PhantomRaven?
 
