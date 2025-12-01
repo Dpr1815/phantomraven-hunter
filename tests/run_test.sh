@@ -1,7 +1,7 @@
 #!/bin/bash
 
 ###############################################################################
-# PhantomRaven Hunter Test Suite
+# npm-threat-hunter Test Suite
 #
 # ⚠️  SAFETY GUARANTEE ⚠️
 # This test script is SAFE and does NOT:
@@ -25,9 +25,9 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SCANNER="$SCRIPT_DIR/../phantomraven-hunter.sh"
+SCANNER="$SCRIPT_DIR/../npm-threat-hunter.sh"
 TEST_DIR="$SCRIPT_DIR/test_projects"
-RESULTS_FILE="/tmp/phantomraven_test_results.txt"
+RESULTS_FILE="/tmp/npm-threat-hunter_test_results.txt"
 
 # Colors
 GREEN='\033[0;32m'
@@ -465,7 +465,7 @@ test_version_flag() {
         "Version Flag" \
         0 \
         "" \
-        "PhantomRaven Hunter v" \
+        "npm-threat-hunter v" \
         --version
 }
 
@@ -531,7 +531,7 @@ EOF
 main() {
     echo "╔═══════════════════════════════════════════════════════════╗"
     echo "║                                                           ║"
-    echo "║       PhantomRaven Hunter Test Suite                      ║"
+    echo "║       npm-threat-hunter Test Suite                      ║"
     echo "║                                                           ║"
     echo "╚═══════════════════════════════════════════════════════════╝"
     echo ""
