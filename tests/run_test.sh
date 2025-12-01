@@ -60,6 +60,11 @@ run_test() {
     local expected_exit_code="$2"
     local project_path="$3"
     local should_contain="$4"
+    shift 4
+    local extra_args=()
+    if [ $# -gt 0 ]; then
+        extra_args=("$@")
+    fi
     
     ((TESTS_TOTAL++)) || true
     
@@ -70,7 +75,14 @@ run_test() {
     
     # Run scanner - temporarily disable errexit for this section
     set +e
-    "$SCANNER" "$project_path" > "$RESULTS_FILE" 2>&1
+    local cmd=("$SCANNER")
+    if [ ${#extra_args[@]} -gt 0 ]; then
+        cmd+=("${extra_args[@]}")
+    fi
+    if [ -n "$project_path" ]; then
+        cmd+=("$project_path")
+    fi
+    "${cmd[@]}" > "$RESULTS_FILE" 2>&1
     local actual_exit_code=$?
     set -e
     
@@ -342,9 +354,12 @@ EOF
 }
 EOF
     
-    # Note: This test requires --deep flag
-    # We'll just verify the script can handle it
-    echo "⏩ Skipping deep scan test (would require --deep flag implementation in test)"
+    run_test \
+        "Deep Scan - Credential Theft Pattern" \
+        0 \
+        "$project" \
+        "Credential theft pattern" \
+        --deep
 }
 
 ###############################################################################
@@ -371,6 +386,143 @@ EOF
         1 \
         "$project" \
         "MALICIOUS DOMAIN FOUND"
+}
+
+###############################################################################
+# TEST CASE 11: JSON Output (Clean Project)
+###############################################################################
+test_json_output_clean() {
+    local project="$TEST_DIR/json_clean"
+    mkdir -p "$project"
+    
+    cat > "$project/package.json" << 'EOF'
+{
+  "name": "json-clean",
+  "version": "1.0.0"
+}
+EOF
+    
+    run_test \
+        "JSON Output (Clean Project)" \
+        0 \
+        "$project" \
+        "\"severity\": \"clean\"" \
+        --json
+}
+
+###############################################################################
+# TEST CASE 12: JSON Output (Critical Finding)
+###############################################################################
+test_json_output_malicious() {
+    local project="$TEST_DIR/json_malicious"
+    mkdir -p "$project"
+    
+    cat > "$project/package.json" << 'EOF'
+{
+  "name": "json-malicious",
+  "version": "1.0.0",
+  "dependencies": {
+    "eslint-comments": "^1.0.0"
+  }
+}
+EOF
+    
+    run_test \
+        "JSON Output (Critical Finding)" \
+        1 \
+        "$project" \
+        "\"severity\": \"critical\"" \
+        --json
+}
+
+###############################################################################
+# TEST CASE 13: Dry Run Mode
+###############################################################################
+test_dry_run_mode() {
+    local project="$TEST_DIR/dry_run_project"
+    mkdir -p "$project"
+    
+    cat > "$project/package.json" << 'EOF'
+{
+  "name": "dry-run",
+  "version": "1.0.0"
+}
+EOF
+    
+    run_test \
+        "Dry Run Mode" \
+        0 \
+        "$project" \
+        "DRY RUN MODE - No actual scanning will be performed" \
+        --dry-run
+}
+
+###############################################################################
+# TEST CASE 14: Version Flag
+###############################################################################
+test_version_flag() {
+    run_test \
+        "Version Flag" \
+        0 \
+        "" \
+        "PhantomRaven Hunter v" \
+        --version
+}
+
+###############################################################################
+# TEST CASE 15: Help Flag
+###############################################################################
+test_help_flag() {
+    run_test \
+        "Help Flag" \
+        0 \
+        "" \
+        "USAGE" \
+        --help
+}
+
+###############################################################################
+# TEST CASE 16: No Cache Flag
+###############################################################################
+test_no_cache_flag() {
+    local project="$TEST_DIR/no_cache_project"
+    mkdir -p "$project"
+    
+    cat > "$project/package.json" << 'EOF'
+{
+  "name": "no-cache-project",
+  "version": "1.0.0"
+}
+EOF
+    
+    run_test \
+        "No Cache Flag" \
+        0 \
+        "$project" \
+        "Use Cache:      false" \
+        --no-cache
+}
+
+###############################################################################
+# TEST CASE 17: Parallel Flag
+###############################################################################
+test_parallel_flag() {
+    local project="$TEST_DIR/parallel_project"
+    mkdir -p "$project"
+    
+    cat > "$project/package.json" << 'EOF'
+{
+  "name": "parallel-project",
+  "version": "1.0.0"
+}
+EOF
+    
+    run_test \
+        "Parallel Flag" \
+        0 \
+        "$project" \
+        "Parallel:       true" \
+        --parallel
 }
 
 ###############################################################################
@@ -409,6 +561,13 @@ main() {
     test_multiple_malicious
     test_credential_theft_pattern
     test_hardcoded_malicious_domain
+    test_json_output_clean
+    test_json_output_malicious
+    test_dry_run_mode
+    test_version_flag
+    test_help_flag
+    test_no_cache_flag
+    test_parallel_flag
     
     teardown
     

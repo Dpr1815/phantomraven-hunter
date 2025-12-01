@@ -64,6 +64,10 @@ brew install jq      # macOS
 
 # Verify
 jq --version
+
+# Optional accelerators
+sudo apt install parallel # Ubuntu/Debian
+brew install parallel   # macOS
 ```
 
 ### Installation
@@ -128,6 +132,28 @@ Everything plus:
 ```
 
 Shows all findings including whitelisted safe packages.
+
+#### 5. JSON & Dry-Run Modes (CI Friendly)
+
+```bash
+# JSON report you can redirect to a file
+./phantomraven-hunter.sh --deep --json ~/projects > phantomraven-report.json
+
+# Explore what would be scanned without touching files
+./phantomraven-hunter.sh --dry-run ~/projects
+```
+
+#### 6. Performance / Cache Controls
+
+```bash
+# Force signature reload if you just updated data files
+./phantomraven-hunter.sh --no-cache ~/projects
+
+# Enable GNU parallel for faster deep scans
+./phantomraven-hunter.sh --deep --parallel ~/projects
+```
+
+You can combine any of the flags above, e.g. `--deep --json --parallel` for a machine-readable deep report at maximum speed.
 
 ## 📊 Understanding Results
 
