@@ -1,0 +1,61 @@
+# Supply Chain Attack IOC Artifacts
+# Files and patterns created by malware
+# Last Updated: 2025-12-01
+# Format: TYPE|PATTERN|DESCRIPTION|CAMPAIGN
+
+###############################################################################
+# Shai-Hulud 2.0 Artifacts
+# Source: https://www.wiz.io/blog/shai-hulud-2-0-ongoing-supply-chain-attack
+###############################################################################
+
+# Payload files (created in project root or node_modules)
+FILE|setup_bun.js|Shai-Hulud payload loader|SHAI_HULUD_2
+FILE|bun_environment.js|Shai-Hulud environment stealer|SHAI_HULUD_2
+FILE|cloud.json|Exfiltrated cloud credentials|SHAI_HULUD_2
+FILE|contents.json|Exfiltrated repository contents|SHAI_HULUD_2
+FILE|environment.json|Exfiltrated environment variables|SHAI_HULUD_2
+FILE|truffleSecrets.json|Exfiltrated secrets (Truffle format)|SHAI_HULUD_2
+
+# GitHub Actions workflow injections
+WORKFLOW|discussion.yaml|Backdoor workflow (self-hosted runner exploit)|SHAI_HULUD_2
+WORKFLOW|formatter_*.yml|Secret exfiltration workflow|SHAI_HULUD_2
+WORKFLOW|shai-hulud-workflow.yml|Named Shai-Hulud workflow|SHAI_HULUD_2
+
+# Self-hosted runner name pattern
+RUNNER|SHA1HULUD|Malicious self-hosted runner registration|SHAI_HULUD_2
+
+# Code patterns in workflows (injection vulnerability)
+CODE_PATTERN|echo \$\{\{ github\.event\.discussion\.body \}\}|Command injection via discussion body|SHAI_HULUD_2
+CODE_PATTERN|runs-on: self-hosted|Self-hosted runner targeting|SHAI_HULUD_2
+CODE_PATTERN|toJSON\(secrets\)|Secrets enumeration|SHAI_HULUD_2
+
+###############################################################################
+# Malicious Version Ranges (package@version)
+# These specific versions are confirmed compromised
+###############################################################################
+VERSION|@zapier/zapier-sdk|0.15.5,0.15.6,0.15.7|SHAI_HULUD_2
+VERSION|zapier-platform-core|18.0.2,18.0.3,18.0.4|SHAI_HULUD_2
+VERSION|zapier-platform-cli|18.0.2,18.0.3,18.0.4|SHAI_HULUD_2
+VERSION|zapier-platform-schema|18.0.2,18.0.3,18.0.4|SHAI_HULUD_2
+VERSION|@zapier/mcp-integration|3.0.1,3.0.2,3.0.3|SHAI_HULUD_2
+VERSION|@zapier/secret-scrubber|1.1.3,1.1.4,1.1.5|SHAI_HULUD_2
+VERSION|@zapier/ai-actions-react|0.1.12,0.1.13,0.1.14|SHAI_HULUD_2
+VERSION|@zapier/stubtree|0.1.2,0.1.3,0.1.4|SHAI_HULUD_2
+VERSION|zapier-scripts|7.8.3,7.8.4|SHAI_HULUD_2
+VERSION|@ensdomains/ens-validation|0.1.1|SHAI_HULUD_2
+VERSION|@ensdomains/content-hash|3.0.1|SHAI_HULUD_2
+VERSION|ethereum-ens|0.8.1|SHAI_HULUD_2
+VERSION|@ensdomains/react-ens-address|0.0.32|SHAI_HULUD_2
+VERSION|@ensdomains/ens-contracts|1.6.1|SHAI_HULUD_2
+VERSION|@ensdomains/ensjs|4.0.3|SHAI_HULUD_2
+VERSION|@ensdomains/dnssecoraclejs|0.2.9|SHAI_HULUD_2
+VERSION|@ensdomains/address-encoder|0.1.5|SHAI_HULUD_2
+VERSION|@posthog/agent|1.24.1|SHAI_HULUD_2
+
+###############################################################################
+# Malicious Namespace Prefixes
+# Any package under these namespaces should be investigated
+###############################################################################
+NAMESPACE|@trigo/|Compromised publisher namespace|SHAI_HULUD_2
+NAMESPACE|@orbitgtbelgium/|Compromised publisher namespace|SHAI_HULUD_2
+NAMESPACE|@louisle2/|Compromised publisher namespace|SHAI_HULUD_2

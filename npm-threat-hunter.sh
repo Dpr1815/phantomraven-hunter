@@ -1,12 +1,12 @@
 #!/bin/bash
 
 #############################################################################
-# PhantomRaven Hunter - Comprehensive NPM Malware Detection
+# npm-threat-hunter - Comprehensive NPM Supply Chain Malware Detection
 #
-# A shell-based scanner for detecting PhantomRaven npm supply chain malware
-# and similar attacks using Remote Dynamic Dependencies (RDD).
+# A shell-based scanner for detecting npm supply chain attacks including
+# PhantomRaven, Shai-Hulud 2.0, and similar threats.
 #
-# Usage: ./phantomraven-hunter.sh [OPTIONS] [PATH]
+# Usage: ./npm-threat-hunter.sh [OPTIONS] [PATH]
 #
 # Options:
 #   --deep         Enable deep code scanning
@@ -24,9 +24,13 @@
 #   1 - CRITICAL (malware detected - take immediate action)
 #   2 - WARNING (suspicious indicators found)
 #
-# Author: Security Community
+# Supported Campaigns:
+#   - PhantomRaven (Aug-Oct 2025)
+#   - Shai-Hulud 2.0 (Nov 2025 - ONGOING)
+#
+# Repository: https://github.com/paoloanzn/npm-threat-hunter
 # License: MIT
-# Version: 1.0.2
+# Version: 2.0.0
 #############################################################################
 
 set -e
@@ -38,7 +42,7 @@ set -e
 #############################################################################
 
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-readonly VERSION="1.0.2"
+readonly VERSION="2.0.0"
 
 # Data files (external configuration)
 readonly DATA_DIR="${SCRIPT_DIR}/data"
@@ -46,6 +50,7 @@ readonly MALICIOUS_PACKAGES_FILE="${DATA_DIR}/malicious-packages.txt"
 readonly MALICIOUS_DOMAINS_FILE="${DATA_DIR}/malicious-domains.txt"
 readonly SAFE_DOMAINS_FILE="${DATA_DIR}/safe-domains.txt"
 readonly SAFE_PACKAGES_FILE="${DATA_DIR}/safe-packages.txt"
+readonly IOC_ARTIFACTS_FILE="${DATA_DIR}/ioc-artifacts.txt"
 
 # Scan configuration
 SCAN_PATH="${1:-.}"
@@ -63,6 +68,7 @@ readonly YELLOW='\033[1;33m'
 readonly GREEN='\033[0;32m'
 readonly BLUE='\033[0;34m'
 readonly CYAN='\033[0;36m'
+readonly MAGENTA='\033[0;35m'
 readonly NC='\033[0m'
 readonly BOLD='\033[1m'
 
@@ -73,6 +79,9 @@ SUSPICIOUS_SCRIPT_COUNT=0
 CREDENTIAL_THEFT_COUNT=0
 NETWORK_CALL_COUNT=0
 TIMING_SUSPICION_COUNT=0
+SHAI_HULUD_ARTIFACT_COUNT=0
+WORKFLOW_INJECTION_COUNT=0
+VERSION_MATCH_COUNT=0
 
 # Performance tracking
 SCAN_START_TIME=0
@@ -87,6 +96,9 @@ readonly SUSPICIOUS_SCRIPTS="${TMP_DIR}/suspicious_scripts.txt"
 readonly CREDENTIAL_THEFT="${TMP_DIR}/credential_theft.txt"
 readonly NETWORK_CALLS="${TMP_DIR}/network_calls.txt"
 readonly TIMING_ISSUES="${TMP_DIR}/timing_issues.txt"
+readonly SHAI_HULUD_FINDINGS="${TMP_DIR}/shai_hulud_findings.txt"
+readonly WORKFLOW_FINDINGS="${TMP_DIR}/workflow_findings.txt"
+readonly VERSION_FINDINGS="${TMP_DIR}/version_findings.txt"
 readonly CACHE_DIR="${TMP_DIR}/cache"
 readonly ERROR_LOG="${TMP_DIR}/errors.log"
 
@@ -191,18 +203,17 @@ clear_progress() {
 
 # Generate hash of data files for caching
 get_data_hash() {
+    local files_to_hash=""
+    [ -f "$MALICIOUS_PACKAGES_FILE" ] && files_to_hash="$files_to_hash $MALICIOUS_PACKAGES_FILE"
+    [ -f "$MALICIOUS_DOMAINS_FILE" ] && files_to_hash="$files_to_hash $MALICIOUS_DOMAINS_FILE"
+    [ -f "$SAFE_DOMAINS_FILE" ] && files_to_hash="$files_to_hash $SAFE_DOMAINS_FILE"
+    [ -f "$SAFE_PACKAGES_FILE" ] && files_to_hash="$files_to_hash $SAFE_PACKAGES_FILE"
+    [ -f "$IOC_ARTIFACTS_FILE" ] && files_to_hash="$files_to_hash $IOC_ARTIFACTS_FILE"
+    
     if command -v sha256sum &> /dev/null; then
-        cat "$MALICIOUS_PACKAGES_FILE" \
-            "$MALICIOUS_DOMAINS_FILE" \
-            "$SAFE_DOMAINS_FILE" \
-            "$SAFE_PACKAGES_FILE" 2>/dev/null | \
-        sha256sum | cut -d' ' -f1
+        cat $files_to_hash 2>/dev/null | sha256sum | cut -d' ' -f1
     elif command -v shasum &> /dev/null; then
-        cat "$MALICIOUS_PACKAGES_FILE" \
-            "$MALICIOUS_DOMAINS_FILE" \
-            "$SAFE_DOMAINS_FILE" \
-            "$SAFE_PACKAGES_FILE" 2>/dev/null | \
-        shasum -a 256 | cut -d' ' -f1
+        cat $files_to_hash 2>/dev/null | shasum -a 256 | cut -d' ' -f1
     else
         echo "no-cache"
     fi
@@ -228,6 +239,46 @@ load_list_from_file() {
     
     # Export array globally
     eval "${array_name}=(\"\${items[@]}\")"
+}
+
+load_ioc_artifacts() {
+    if [ ! -f "$IOC_ARTIFACTS_FILE" ]; then
+        log_warning "IOC artifacts file not found: $IOC_ARTIFACTS_FILE"
+        return
+    fi
+    
+    # Initialize arrays
+    IOC_FILES=()
+    IOC_WORKFLOWS=()
+    IOC_CODE_PATTERNS=()
+    IOC_VERSIONS=()
+    IOC_NAMESPACES=()
+    
+    while IFS='|' read -r type pattern description campaign; do
+        # Skip comments and empty lines
+        [[ "$type" =~ ^[[:space:]]*# ]] && continue
+        [[ -z "${type// }" ]] && continue
+        
+        case "$type" in
+            FILE)
+                IOC_FILES+=("$pattern|$description|$campaign")
+                ;;
+            WORKFLOW)
+                IOC_WORKFLOWS+=("$pattern|$description|$campaign")
+                ;;
+            CODE_PATTERN)
+                IOC_CODE_PATTERNS+=("$pattern|$description|$campaign")
+                ;;
+            VERSION)
+                IOC_VERSIONS+=("$pattern|$description|$campaign")
+                ;;
+            NAMESPACE)
+                IOC_NAMESPACES+=("$pattern|$description|$campaign")
+                ;;
+        esac
+    done < "$IOC_ARTIFACTS_FILE"
+    
+    log_info "Loaded ${#IOC_FILES[@]} IOC files, ${#IOC_WORKFLOWS[@]} workflow patterns, ${#IOC_VERSIONS[@]} version IOCs, ${#IOC_NAMESPACES[@]} namespace patterns"
 }
 
 save_cache() {
@@ -277,6 +328,9 @@ load_all_data() {
             save_cache
         fi
     fi
+    
+    # Always load IOC artifacts (not cached for now)
+    load_ioc_artifacts
     
     log_info "Loaded ${#MALICIOUS_PACKAGES[@]} malicious packages"
     log_info "Loaded ${#MALICIOUS_DOMAINS[@]} malicious domains"
@@ -329,6 +383,18 @@ log_critical() {
     fi
 }
 
+log_campaign() {
+    local campaign="$1"
+    local message="$2"
+    local color="$MAGENTA"
+    
+    if [ "$JSON_OUTPUT" = true ]; then
+        echo -e "${color}[${campaign}]${NC} $message" >&2
+    else
+        echo -e "${color}[${campaign}]${NC} $message"
+    fi
+}
+
 print_banner() {
     local target_stream=1
     if [ "$JSON_OUTPUT" = true ]; then
@@ -339,8 +405,10 @@ print_banner() {
     cat >&$target_stream << "EOF"
 ╔═══════════════════════════════════════════════════════════╗
 ║                                                           ║
-║         PhantomRaven Hunter v1.0.2                        ║
-║         Comprehensive NPM Malware Detection               ║
+║              npm-threat-hunter v2.0.0                     ║
+║        Comprehensive Supply Chain Attack Detection        ║
+║                                                           ║
+║   Campaigns: PhantomRaven | Shai-Hulud 2.0 | and more     ║
 ║                                                           ║
 ╚═══════════════════════════════════════════════════════════╝
 EOF
@@ -349,8 +417,8 @@ EOF
 
 show_help() {
     cat << EOF
-PhantomRaven Hunter v${VERSION} (Enhanced)
-Detect PhantomRaven npm malware and similar supply chain attacks
+npm-threat-hunter v${VERSION}
+Detect npm supply chain attacks including PhantomRaven, Shai-Hulud 2.0, and more
 
 USAGE:
     $(basename "$0") [OPTIONS] [PATH]
@@ -366,6 +434,10 @@ OPTIONS:
     --help         Show this help message
     --version      Show version information
 
+SUPPORTED CAMPAIGNS:
+    - PhantomRaven (Aug-Oct 2025) - RDD-based attacks
+    - Shai-Hulud 2.0 (Nov 2025+)  - GitHub Actions exploitation
+
 EXAMPLES:
     $(basename "$0") ~/projects                      # Basic scan
     $(basename "$0") --deep ~/projects               # Deep scan (recommended)
@@ -380,6 +452,9 @@ EXIT CODES:
 REQUIREMENTS:
     - jq (JSON processor)
     - GNU parallel (optional, for --parallel)
+
+REPOSITORY:
+    https://github.com/paoloanzn/npm-threat-hunter
 
 For more information, see the README.md file.
 EOF
@@ -501,6 +576,12 @@ validate_data_files() {
         done
         exit 1
     fi
+    
+    # IOC artifacts file is optional but recommended
+    if [ ! -f "$IOC_ARTIFACTS_FILE" ]; then
+        log_warning "IOC artifacts file not found: $IOC_ARTIFACTS_FILE"
+        log_warning "Shai-Hulud 2.0 specific detection will be limited"
+    fi
 }
 
 #############################################################################
@@ -581,7 +662,7 @@ detect_rdd() {
     fi
 }
 
-# 2. Check for known malicious packages (Optimized)
+# 2. Check for known malicious packages (Enhanced with namespace support)
 detect_malicious_packages() {
     log_info "Scanning for known malicious packages..."
     
@@ -602,27 +683,37 @@ detect_malicious_packages() {
         ((current++)) || true
         show_progress "$current" "$total" "Checking packages"
         
-        for malicious_pkg in "${MALICIOUS_PACKAGES[@]}"; do
-            if jq -e --arg pkg "$malicious_pkg" '
-                (.dependencies // {}) + 
-                (.devDependencies // {}) + 
-                (.peerDependencies // {}) + 
-                (.optionalDependencies // {}) | 
-                has($pkg)
-            ' "$pkg_file" > /dev/null 2>&1; then
-                
-                local version=$(safe_jq --arg pkg "$malicious_pkg" '
-                    ((.dependencies // {}) + 
-                    (.devDependencies // {}) + 
-                    (.peerDependencies // {}) + 
-                    (.optionalDependencies // {}))[$pkg]
-                ' "$pkg_file" 2>/dev/null || echo "unknown")
-                
-                log_critical "KNOWN MALICIOUS PACKAGE: $malicious_pkg@$version"
-                echo "CRITICAL|$pkg_file|$malicious_pkg|$version" >> "$MALICIOUS_FINDINGS"
-                ((MALICIOUS_PKG_COUNT++)) || true
-            fi
-        done
+        # Get all dependencies from the file
+        local deps=$(safe_jq '
+            ((.dependencies // {}) + 
+            (.devDependencies // {}) + 
+            (.peerDependencies // {}) + 
+            (.optionalDependencies // {})) | 
+            to_entries[] | 
+            "\(.key)|\(.value)"
+        ' "$pkg_file" 2>/dev/null || true)
+        
+        while IFS='|' read -r dep_name dep_version; do
+            [ -z "$dep_name" ] && continue
+            
+            # Check exact package match
+            for malicious_pkg in "${MALICIOUS_PACKAGES[@]}"; do
+                # Handle namespace prefixes (e.g., @trigo/)
+                if [[ "$malicious_pkg" == */ ]]; then
+                    # This is a namespace prefix
+                    if [[ "$dep_name" == ${malicious_pkg}* ]]; then
+                        log_critical "MALICIOUS NAMESPACE PACKAGE: $dep_name@$dep_version"
+                        log_campaign "SHAI_HULUD_2" "Package under compromised namespace: $malicious_pkg"
+                        echo "CRITICAL|$pkg_file|$dep_name|$dep_version|NAMESPACE_MATCH|$malicious_pkg" >> "$MALICIOUS_FINDINGS"
+                        ((MALICIOUS_PKG_COUNT++)) || true
+                    fi
+                elif [ "$dep_name" = "$malicious_pkg" ]; then
+                    log_critical "KNOWN MALICIOUS PACKAGE: $dep_name@$dep_version"
+                    echo "CRITICAL|$pkg_file|$dep_name|$dep_version|EXACT_MATCH" >> "$MALICIOUS_FINDINGS"
+                    ((MALICIOUS_PKG_COUNT++)) || true
+                fi
+            done
+        done <<< "$deps"
         
         ((FILES_SCANNED++)) || true
     done
@@ -636,7 +727,184 @@ detect_malicious_packages() {
     fi
 }
 
-# 3. Analyze lifecycle scripts
+# 3. Check for specific compromised versions (Shai-Hulud 2.0)
+detect_compromised_versions() {
+    log_info "Checking for specific compromised package versions..."
+    
+    if [ "$DRY_RUN" = true ]; then
+        log_info "[DRY RUN] Would check for ${#IOC_VERSIONS[@]} compromised versions"
+        return
+    fi
+    
+    if [ ${#IOC_VERSIONS[@]} -eq 0 ]; then
+        log_info "No version-specific IOCs loaded, skipping"
+        return
+    fi
+    
+    local pkg_files=()
+    while IFS= read -r file; do
+        pkg_files+=("$file")
+    done < <(find "$SCAN_PATH" -name "package.json" -type f 2>/dev/null)
+    
+    for pkg_file in "${pkg_files[@]}"; do
+        # Also check package-lock.json for exact versions
+        local lock_file="${pkg_file%.json}-lock.json"
+        
+        for version_ioc in "${IOC_VERSIONS[@]}"; do
+            IFS='|' read -r pkg_name versions campaign <<< "$version_ioc"
+            
+            # Check if package exists in dependencies
+            local installed_version=$(safe_jq --arg pkg "$pkg_name" '
+                ((.dependencies // {}) + 
+                (.devDependencies // {}) + 
+                (.peerDependencies // {}) + 
+                (.optionalDependencies // {}))[$pkg] // empty
+            ' "$pkg_file" 2>/dev/null || true)
+            
+            if [ -n "$installed_version" ]; then
+                # Check if the version matches any compromised version
+                IFS=',' read -ra version_array <<< "$versions"
+                for bad_version in "${version_array[@]}"; do
+                    # Clean whitespace
+                    bad_version=$(echo "$bad_version" | tr -d ' ')
+                    
+                    # Check exact match or semver match
+                    if [[ "$installed_version" == "$bad_version" ]] || \
+                       [[ "$installed_version" == "^$bad_version" ]] || \
+                       [[ "$installed_version" == "~$bad_version" ]]; then
+                        log_critical "COMPROMISED VERSION DETECTED: $pkg_name@$bad_version"
+                        log_campaign "$campaign" "Exact compromised version match!"
+                        echo "CRITICAL|$pkg_file|$pkg_name|$bad_version|$campaign" >> "$VERSION_FINDINGS"
+                        ((VERSION_MATCH_COUNT++)) || true
+                    fi
+                done
+            fi
+        done
+    done
+    
+    if [ "$VERSION_MATCH_COUNT" -eq 0 ]; then
+        log_success "No compromised versions detected"
+    else
+        log_critical "Found $VERSION_MATCH_COUNT packages with known compromised versions!"
+    fi
+}
+
+# 4. Detect Shai-Hulud 2.0 artifact files
+detect_shai_hulud_artifacts() {
+    log_info "Scanning for Shai-Hulud 2.0 artifacts..."
+    
+    if [ "$DRY_RUN" = true ]; then
+        log_info "[DRY RUN] Would scan for Shai-Hulud payload files"
+        return
+    fi
+    
+    if [ ${#IOC_FILES[@]} -eq 0 ]; then
+        log_info "No IOC file patterns loaded, skipping"
+        return
+    fi
+    
+    for file_ioc in "${IOC_FILES[@]}"; do
+        IFS='|' read -r filename description campaign <<< "$file_ioc"
+        
+        # Search for the file
+        while read -r found_file; do
+            log_critical "SHAI-HULUD ARTIFACT FOUND: $found_file"
+            log_campaign "$campaign" "$description"
+            echo "CRITICAL|$found_file|$filename|$description|$campaign" >> "$SHAI_HULUD_FINDINGS"
+            ((SHAI_HULUD_ARTIFACT_COUNT++)) || true
+        done < <(find "$SCAN_PATH" -name "$filename" -type f 2>/dev/null)
+    done
+    
+    if [ "$SHAI_HULUD_ARTIFACT_COUNT" -eq 0 ]; then
+        log_success "No Shai-Hulud artifacts found"
+    else
+        log_critical "Found $SHAI_HULUD_ARTIFACT_COUNT Shai-Hulud artifacts!"
+    fi
+}
+
+# 5. Scan GitHub Actions workflows for injection
+detect_workflow_injections() {
+    log_info "Scanning GitHub Actions workflows for injections..."
+    
+    if [ "$DRY_RUN" = true ]; then
+        log_info "[DRY RUN] Would scan .github/workflows for malicious patterns"
+        return
+    fi
+    
+    # Find all workflow directories
+    local workflow_dirs=()
+    while IFS= read -r dir; do
+        workflow_dirs+=("$dir")
+    done < <(find "$SCAN_PATH" -type d -name "workflows" -path "*/.github/*" 2>/dev/null)
+    
+    if [ ${#workflow_dirs[@]} -eq 0 ]; then
+        log_info "No GitHub Actions workflow directories found"
+        return
+    fi
+    
+    log_info "Found ${#workflow_dirs[@]} workflow directory(ies)"
+    
+    for workflow_dir in "${workflow_dirs[@]}"; do
+        # Check for known malicious workflow names
+        for workflow_ioc in "${IOC_WORKFLOWS[@]}"; do
+            IFS='|' read -r pattern description campaign <<< "$workflow_ioc"
+            
+            while read -r found_workflow; do
+                log_critical "MALICIOUS WORKFLOW DETECTED: $found_workflow"
+                log_campaign "$campaign" "$description"
+                echo "CRITICAL|$found_workflow|$pattern|$description|$campaign" >> "$WORKFLOW_FINDINGS"
+                ((WORKFLOW_INJECTION_COUNT++)) || true
+            done < <(find "$workflow_dir" -name "$pattern" -type f 2>/dev/null)
+        done
+        
+        # Scan workflow content for injection patterns
+        while read -r workflow_file; do
+            # Check for Shai-Hulud specific patterns
+            
+            # 1. Self-hosted runner with discussion trigger (backdoor pattern)
+            if grep -q "runs-on: self-hosted" "$workflow_file" 2>/dev/null && \
+               grep -q "discussion:" "$workflow_file" 2>/dev/null; then
+                log_critical "BACKDOOR PATTERN: Self-hosted runner with discussion trigger"
+                log_campaign "SHAI_HULUD_2" "Potential command injection via discussions"
+                echo "CRITICAL|$workflow_file|discussion+self-hosted|Backdoor pattern|SHAI_HULUD_2" >> "$WORKFLOW_FINDINGS"
+                ((WORKFLOW_INJECTION_COUNT++)) || true
+            fi
+            
+            # 2. Secret enumeration pattern
+            if grep -qE 'toJSON\(secrets\)' "$workflow_file" 2>/dev/null; then
+                log_critical "SECRET EXFILTRATION: toJSON(secrets) found"
+                log_campaign "SHAI_HULUD_2" "Workflow attempts to enumerate all secrets"
+                echo "CRITICAL|$workflow_file|toJSON(secrets)|Secret enumeration|SHAI_HULUD_2" >> "$WORKFLOW_FINDINGS"
+                ((WORKFLOW_INJECTION_COUNT++)) || true
+            fi
+            
+            # 3. Command injection via event body
+            if grep -qE 'echo \$\{\{.*\.(body|title|comment)\s*\}\}' "$workflow_file" 2>/dev/null; then
+                log_critical "COMMAND INJECTION: Unsafe echo of event data"
+                log_campaign "SHAI_HULUD_2" "Workflow vulnerable to command injection"
+                echo "CRITICAL|$workflow_file|unsafe-echo|Command injection|SHAI_HULUD_2" >> "$WORKFLOW_FINDINGS"
+                ((WORKFLOW_INJECTION_COUNT++)) || true
+            fi
+            
+            # 4. Suspicious artifact upload after secret access
+            if grep -q "upload-artifact" "$workflow_file" 2>/dev/null && \
+               grep -qE '(secrets|\.json)' "$workflow_file" 2>/dev/null; then
+                log_warning "Suspicious: Artifact upload with potential secret access"
+                echo "WARNING|$workflow_file|artifact-upload|Potential secret exfil|SHAI_HULUD_2" >> "$WORKFLOW_FINDINGS"
+                ((WORKFLOW_INJECTION_COUNT++)) || true
+            fi
+            
+        done < <(find "$workflow_dir" -name "*.yml" -o -name "*.yaml" 2>/dev/null)
+    done
+    
+    if [ "$WORKFLOW_INJECTION_COUNT" -eq 0 ]; then
+        log_success "No workflow injections detected"
+    else
+        log_critical "Found $WORKFLOW_INJECTION_COUNT workflow security issues!"
+    fi
+}
+
+# 6. Analyze lifecycle scripts
 analyze_lifecycle_scripts() {
     log_info "Analyzing lifecycle scripts..."
     
@@ -681,6 +949,15 @@ analyze_lifecycle_scripts() {
                     ((SUSPICIOUS_SCRIPT_COUNT++)) || true
                 fi
             fi
+            
+            # Shai-Hulud specific: Check for bun/setup references
+            if echo "$script_content" | grep -iE '(setup_bun|bun_environment|octokit|self-hosted)' > /dev/null 2>&1; then
+                log_critical "SHAI-HULUD PATTERN in lifecycle script: $pkg_name"
+                log_campaign "SHAI_HULUD_2" "Script contains Shai-Hulud indicators"
+                echo "CRITICAL|$pkg_file|$pkg_name|$script_name|$script_content|SHAI_HULUD_PATTERN" >> "$SUSPICIOUS_SCRIPTS"
+                ((SUSPICIOUS_SCRIPT_COUNT++)) || true
+            fi
+            
         done < <(safe_jq '.scripts // {} | to_entries[] | select(.key | test("(pre|post)?install")) | "\(.key)|\(.value)"' "$pkg_file" 2>/dev/null || true)
         
         ((FILES_SCANNED++)) || true
@@ -693,7 +970,7 @@ analyze_lifecycle_scripts() {
     fi
 }
 
-# 4. Deep scan for credential theft patterns (Optimized)
+# 7. Deep scan for credential theft patterns (Optimized)
 deep_scan_credential_theft() {
     if [ "$DEEP_SCAN" = false ]; then
         return
@@ -711,8 +988,8 @@ deep_scan_credential_theft() {
         return
     fi
     
-    # Build combined grep pattern
-    local pattern_string="NPM_TOKEN|GITHUB_TOKEN|GH_TOKEN|GITLAB_TOKEN|CI_TOKEN|process\.env\."
+    # Build combined grep pattern (including Shai-Hulud patterns)
+    local pattern_string="NPM_TOKEN|GITHUB_TOKEN|GH_TOKEN|GITLAB_TOKEN|CI_TOKEN|process\.env\.|toJSON\(secrets\)|self-hosted|SHA1HULUD"
     
     # Use parallel if available
     if [ "$USE_PARALLEL" = true ]; then
@@ -741,7 +1018,7 @@ deep_scan_credential_theft() {
     fi
 }
 
-# 5. Scan for network activity (Optimized)
+# 8. Scan for network activity (Optimized)
 scan_network_activity() {
     if [ "$DEEP_SCAN" = false ]; then
         return
@@ -769,8 +1046,15 @@ scan_network_activity() {
             local pkg_name=$(echo "$js_file" | sed -E 's|.*/node_modules/([^/]+)/.*|\1|')
             local line_num=$(echo "$match" | cut -d: -f1)
             
-            log_warning "Suspicious network call in $pkg_name"
-            echo "WARNING|$js_file|$pkg_name|$line_num|$match" >> "$NETWORK_CALLS"
+            # Check for webhook.site (Shai-Hulud exfil)
+            if echo "$match" | grep -q "webhook.site" 2>/dev/null; then
+                log_critical "EXFILTRATION ENDPOINT: webhook.site detected!"
+                log_campaign "SHAI_HULUD_2" "Known exfiltration endpoint"
+                echo "CRITICAL|$js_file|$pkg_name|$line_num|$match|SHAI_HULUD_EXFIL" >> "$NETWORK_CALLS"
+            else
+                log_warning "Suspicious network call in $pkg_name"
+                echo "WARNING|$js_file|$pkg_name|$line_num|$match" >> "$NETWORK_CALLS"
+            fi
             ((NETWORK_CALL_COUNT++)) || true
         done < <(grep -nE "$network_pattern" "$js_file" 2>/dev/null | grep -v -E "$exclude_pattern" | head -3 || true)
     done < <(find "$SCAN_PATH/node_modules" -type f \( -name "*.js" -o -name "*.mjs" \) 2>/dev/null | head -500)
@@ -780,7 +1064,7 @@ scan_network_activity() {
     fi
 }
 
-# 6. Check installation timing
+# 9. Check installation timing (Updated with Shai-Hulud period)
 check_installation_timing() {
     if [ "$PARANOID" = false ]; then
         return
@@ -793,35 +1077,54 @@ check_installation_timing() {
         return
     fi
     
-    # PhantomRaven period: Aug 1 2025 to Oct 31 2025
-    local aug_2025 oct_2025
+    # Attack periods
+    local phantomraven_start phantomraven_end
+    local shaihulud_start shaihulud_end
     
     if [ "$OS_TYPE" = "macos" ]; then
-        aug_2025=$(date -j -f "%Y-%m-%d" "2025-08-01" +%s 2>/dev/null || echo "0")
-        oct_2025=$(date -j -f "%Y-%m-%d" "2025-10-31" +%s 2>/dev/null || echo "0")
+        phantomraven_start=$(date -j -f "%Y-%m-%d" "2025-08-01" +%s 2>/dev/null || echo "0")
+        phantomraven_end=$(date -j -f "%Y-%m-%d" "2025-10-31" +%s 2>/dev/null || echo "0")
+        shaihulud_start=$(date -j -f "%Y-%m-%d" "2025-11-21" +%s 2>/dev/null || echo "0")
+        shaihulud_end=$(date -j -f "%Y-%m-%d" "2025-11-30" +%s 2>/dev/null || echo "0")
     else
-        aug_2025=$(date -d "2025-08-01" +%s 2>/dev/null || echo "0")
-        oct_2025=$(date -d "2025-10-31" +%s 2>/dev/null || echo "0")
+        phantomraven_start=$(date -d "2025-08-01" +%s 2>/dev/null || echo "0")
+        phantomraven_end=$(date -d "2025-10-31" +%s 2>/dev/null || echo "0")
+        shaihulud_start=$(date -d "2025-11-21" +%s 2>/dev/null || echo "0")
+        shaihulud_end=$(date -d "2025-11-30" +%s 2>/dev/null || echo "0")
     fi
     
-    if [ "$aug_2025" = "0" ] || [ "$oct_2025" = "0" ]; then
+    if [ "$phantomraven_start" = "0" ]; then
         log_warning "Could not parse dates for timing check"
         return
     fi
     
     while read -r nm_dir; do
         local mod_time=$(get_file_mtime "$nm_dir")
+        local mod_date=$(get_file_mtime_readable "$nm_dir")
         
-        if [ -n "$mod_time" ] && [ "$mod_time" != "0" ] && [ "$mod_time" -ge "$aug_2025" ] && [ "$mod_time" -le "$oct_2025" ]; then
-            local mod_date=$(get_file_mtime_readable "$nm_dir")
+        if [ -z "$mod_time" ] || [ "$mod_time" = "0" ]; then
+            continue
+        fi
+        
+        # Check PhantomRaven period (Aug-Oct 2025)
+        if [ "$mod_time" -ge "$phantomraven_start" ] && [ "$mod_time" -le "$phantomraven_end" ]; then
             log_warning "Packages installed during PhantomRaven period: $nm_dir ($mod_date)"
             echo "WARNING|$nm_dir|$mod_date|PHANTOMRAVEN_PERIOD" >> "$TIMING_ISSUES"
             ((TIMING_SUSPICION_COUNT++)) || true
         fi
+        
+        # Check Shai-Hulud period (Nov 21-30, 2025)
+        if [ "$mod_time" -ge "$shaihulud_start" ] && [ "$mod_time" -le "$shaihulud_end" ]; then
+            log_critical "Packages installed during Shai-Hulud 2.0 active period!"
+            log_campaign "SHAI_HULUD_2" "Installation during Nov 21-30, 2025"
+            echo "CRITICAL|$nm_dir|$mod_date|SHAI_HULUD_PERIOD" >> "$TIMING_ISSUES"
+            ((TIMING_SUSPICION_COUNT++)) || true
+        fi
+        
     done < <(find "$SCAN_PATH" -type d -name "node_modules" 2>/dev/null)
 }
 
-# 7. Scan for malicious domains (Optimized)
+# 10. Scan for malicious domains (Optimized)
 scan_for_malicious_domains() {
     log_info "Scanning for known malicious domains..."
     
@@ -885,7 +1188,7 @@ scan_for_malicious_domains() {
     done < <(find "$SCAN_PATH" -maxdepth 3 -type f \( -name "*.js" -o -name "*.ts" -o -name "*.mjs" \) 2>/dev/null)
 }
 
-# 8. Check system compromise
+# 11. Check system compromise
 check_system_compromise() {
     if [ "$PARANOID" = false ]; then
         return
@@ -908,19 +1211,29 @@ check_system_compromise() {
         
         local file_mod_epoch=$(get_file_mtime "$HOME/.gitconfig")
         
-        local aug_2025 oct_2025
+        local phantomraven_start phantomraven_end shaihulud_start shaihulud_end
         if [ "$OS_TYPE" = "macos" ]; then
-            aug_2025=$(date -j -f "%Y-%m-%d" "2025-08-01" +%s 2>/dev/null || echo "0")
-            oct_2025=$(date -j -f "%Y-%m-%d" "2025-10-31" +%s 2>/dev/null || echo "0")
+            phantomraven_start=$(date -j -f "%Y-%m-%d" "2025-08-01" +%s 2>/dev/null || echo "0")
+            phantomraven_end=$(date -j -f "%Y-%m-%d" "2025-10-31" +%s 2>/dev/null || echo "0")
+            shaihulud_start=$(date -j -f "%Y-%m-%d" "2025-11-21" +%s 2>/dev/null || echo "0")
+            shaihulud_end=$(date -j -f "%Y-%m-%d" "2025-11-30" +%s 2>/dev/null || echo "0")
         else
-            aug_2025=$(date -d "2025-08-01" +%s 2>/dev/null || echo "0")
-            oct_2025=$(date -d "2025-10-31" +%s 2>/dev/null || echo "0")
+            phantomraven_start=$(date -d "2025-08-01" +%s 2>/dev/null || echo "0")
+            phantomraven_end=$(date -d "2025-10-31" +%s 2>/dev/null || echo "0")
+            shaihulud_start=$(date -d "2025-11-21" +%s 2>/dev/null || echo "0")
+            shaihulud_end=$(date -d "2025-11-30" +%s 2>/dev/null || echo "0")
         fi
         
-        if [ -n "$file_mod_epoch" ] && [ "$file_mod_epoch" != "0" ] && \
-           [ "$aug_2025" != "0" ] && [ "$oct_2025" != "0" ] && \
-           [ "$file_mod_epoch" -ge "$aug_2025" ] && [ "$file_mod_epoch" -le "$oct_2025" ]; then
-            log_warning "⚠ .gitconfig was modified during PhantomRaven active period!"
+        if [ -n "$file_mod_epoch" ] && [ "$file_mod_epoch" != "0" ]; then
+            if [ "$phantomraven_start" != "0" ] && \
+               [ "$file_mod_epoch" -ge "$phantomraven_start" ] && [ "$file_mod_epoch" -le "$phantomraven_end" ]; then
+                log_warning "⚠ .gitconfig was modified during PhantomRaven active period!"
+            fi
+            if [ "$shaihulud_start" != "0" ] && \
+               [ "$file_mod_epoch" -ge "$shaihulud_start" ] && [ "$file_mod_epoch" -le "$shaihulud_end" ]; then
+                log_critical "⚠ .gitconfig was modified during Shai-Hulud 2.0 active period!"
+                log_campaign "SHAI_HULUD_2" "System config modification detected"
+            fi
         fi
     fi
     
@@ -931,6 +1244,19 @@ check_system_compromise() {
         
         if grep -q "authToken" "$HOME/.npmrc" 2>/dev/null; then
             log_warning "⚠ .npmrc contains authentication tokens"
+        fi
+    fi
+    
+    # Check for Shai-Hulud self-hosted runner registration
+    if command -v gh &> /dev/null; then
+        log_info "Checking for suspicious GitHub self-hosted runners..."
+        if gh api user/repos --jq '.[].name' 2>/dev/null | head -5 | while read -r repo; do
+            if gh api "repos/$repo/actions/runners" 2>/dev/null | grep -q "SHA1HULUD"; then
+                log_critical "SHAI-HULUD RUNNER DETECTED in repo: $repo"
+                return 1
+            fi
+        done; then
+            :
         fi
     fi
     
@@ -947,7 +1273,11 @@ check_system_compromise() {
 
 generate_json_report() {
     local severity="clean"
-    if [ "$MALICIOUS_PKG_COUNT" -gt 0 ] || ([ "$RDD_COUNT" -gt 0 ] && [ -f "$RDD_FINDINGS" ] && grep -q "CRITICAL" "$RDD_FINDINGS" 2>/dev/null); then
+    if [ "$MALICIOUS_PKG_COUNT" -gt 0 ] || \
+       [ "$VERSION_MATCH_COUNT" -gt 0 ] || \
+       [ "$SHAI_HULUD_ARTIFACT_COUNT" -gt 0 ] || \
+       [ "$WORKFLOW_INJECTION_COUNT" -gt 0 ] || \
+       ([ "$RDD_COUNT" -gt 0 ] && [ -f "$RDD_FINDINGS" ] && grep -q "CRITICAL" "$RDD_FINDINGS" 2>/dev/null); then
         severity="critical"
     elif [ "$RDD_COUNT" -gt 0 ] || [ "$SUSPICIOUS_SCRIPT_COUNT" -gt 0 ]; then
         severity="warning"
@@ -972,15 +1302,58 @@ generate_json_report() {
     
     local malicious_findings="[]"
     if [ -f "$MALICIOUS_FINDINGS" ] && [ -s "$MALICIOUS_FINDINGS" ]; then
-        malicious_findings=$(while IFS='|' read -r sev file pkg version; do
+        malicious_findings=$(while IFS='|' read -r sev file pkg version match_type extra; do
             [ -z "$sev" ] && continue
             jq -n \
                 --arg severity "$sev" \
                 --arg file "$file" \
                 --arg package "$pkg" \
                 --arg version "$version" \
-                '{severity: $severity, file: $file, package: $package, version: $version}'
+                --arg match_type "$match_type" \
+                '{severity: $severity, file: $file, package: $package, version: $version, match_type: $match_type}'
         done < "$MALICIOUS_FINDINGS" | jq -s '.' 2>/dev/null || echo "[]")
+    fi
+    
+    local version_findings="[]"
+    if [ -f "$VERSION_FINDINGS" ] && [ -s "$VERSION_FINDINGS" ]; then
+        version_findings=$(while IFS='|' read -r sev file pkg version campaign; do
+            [ -z "$sev" ] && continue
+            jq -n \
+                --arg severity "$sev" \
+                --arg file "$file" \
+                --arg package "$pkg" \
+                --arg version "$version" \
+                --arg campaign "$campaign" \
+                '{severity: $severity, file: $file, package: $package, version: $version, campaign: $campaign}'
+        done < "$VERSION_FINDINGS" | jq -s '.' 2>/dev/null || echo "[]")
+    fi
+    
+    local shai_hulud_findings="[]"
+    if [ -f "$SHAI_HULUD_FINDINGS" ] && [ -s "$SHAI_HULUD_FINDINGS" ]; then
+        shai_hulud_findings=$(while IFS='|' read -r sev file pattern desc campaign; do
+            [ -z "$sev" ] && continue
+            jq -n \
+                --arg severity "$sev" \
+                --arg file "$file" \
+                --arg pattern "$pattern" \
+                --arg description "$desc" \
+                --arg campaign "$campaign" \
+                '{severity: $severity, file: $file, pattern: $pattern, description: $description, campaign: $campaign}'
+        done < "$SHAI_HULUD_FINDINGS" | jq -s '.' 2>/dev/null || echo "[]")
+    fi
+    
+    local workflow_findings="[]"
+    if [ -f "$WORKFLOW_FINDINGS" ] && [ -s "$WORKFLOW_FINDINGS" ]; then
+        workflow_findings=$(while IFS='|' read -r sev file pattern desc campaign; do
+            [ -z "$sev" ] && continue
+            jq -n \
+                --arg severity "$sev" \
+                --arg file "$file" \
+                --arg pattern "$pattern" \
+                --arg description "$desc" \
+                --arg campaign "$campaign" \
+                '{severity: $severity, file: $file, pattern: $pattern, description: $description, campaign: $campaign}'
+        done < "$WORKFLOW_FINDINGS" | jq -s '.' 2>/dev/null || echo "[]")
     fi
 
     local suspicious_script_findings="[]"
@@ -1025,7 +1398,7 @@ generate_json_report() {
     local network_call_findings="[]"
     if [ -f "$NETWORK_CALLS" ] && [ -s "$NETWORK_CALLS" ]; then
         network_call_findings=$(
-            while IFS='|' read -r sev file pkg line_num snippet; do
+            while IFS='|' read -r sev file pkg line_num snippet extra; do
                 [ -z "$sev" ] && continue
                 jq -n \
                     --arg severity "$sev" \
@@ -1033,7 +1406,8 @@ generate_json_report() {
                     --arg package "$pkg" \
                     --arg line "$line_num" \
                     --arg snippet "$snippet" \
-                    '{severity: $severity, file: $file, package: $package, line: $line, snippet: $snippet}'
+                    --arg note "${extra:-}" \
+                    '{severity: $severity, file: $file, package: $package, line: $line, snippet: $snippet} + (if $note != "" then {note: $note} else {} end)'
             done < "$NETWORK_CALLS" | jq -s '.' 2>/dev/null || echo "[]"
         )
     fi
@@ -1067,12 +1441,18 @@ generate_json_report() {
         --arg files_scanned "$FILES_SCANNED" \
         --arg rdd_count "$RDD_COUNT" \
         --arg malicious_count "$MALICIOUS_PKG_COUNT" \
+        --arg version_match_count "$VERSION_MATCH_COUNT" \
+        --arg shai_hulud_count "$SHAI_HULUD_ARTIFACT_COUNT" \
+        --arg workflow_count "$WORKFLOW_INJECTION_COUNT" \
         --arg suspicious_scripts "$SUSPICIOUS_SCRIPT_COUNT" \
         --arg credential_theft "$CREDENTIAL_THEFT_COUNT" \
         --arg network_calls "$NETWORK_CALL_COUNT" \
         --arg timing_suspicions "$TIMING_SUSPICION_COUNT" \
         --argjson rdd_findings "$rdd_findings" \
         --argjson malicious_findings "$malicious_findings" \
+        --argjson version_findings "$version_findings" \
+        --argjson shai_hulud_findings "$shai_hulud_findings" \
+        --argjson workflow_findings "$workflow_findings" \
         --argjson suspicious_script_findings "$suspicious_script_findings" \
         --argjson credential_theft_findings "$credential_theft_findings" \
         --argjson network_call_findings "$network_call_findings" \
@@ -1085,9 +1465,16 @@ generate_json_report() {
             duration_seconds: ($duration | tonumber),
             files_scanned: ($files_scanned | tonumber),
             severity: $severity,
+            campaigns_detected: (
+                (if ($shai_hulud_count | tonumber) > 0 or ($version_match_count | tonumber) > 0 or ($workflow_count | tonumber) > 0 then ["SHAI_HULUD_2"] else [] end) +
+                (if ($rdd_count | tonumber) > 0 then ["PHANTOMRAVEN"] else [] end)
+            ),
             summary: {
                 rdd_count: ($rdd_count | tonumber),
                 malicious_packages: ($malicious_count | tonumber),
+                compromised_versions: ($version_match_count | tonumber),
+                shai_hulud_artifacts: ($shai_hulud_count | tonumber),
+                workflow_injections: ($workflow_count | tonumber),
                 suspicious_scripts: ($suspicious_scripts | tonumber),
                 credential_theft_patterns: ($credential_theft | tonumber),
                 suspicious_network_calls: ($network_calls | tonumber),
@@ -1096,6 +1483,9 @@ generate_json_report() {
             findings: {
                 remote_dynamic_dependencies: $rdd_findings,
                 malicious_packages: $malicious_findings,
+                compromised_versions: $version_findings,
+                shai_hulud_artifacts: $shai_hulud_findings,
+                workflow_injections: $workflow_findings,
                 suspicious_scripts: $suspicious_script_findings,
                 credential_theft: $credential_theft_findings,
                 network_calls: $network_call_findings,
@@ -1138,6 +1528,9 @@ generate_report() {
     echo -e "${BOLD}Summary:${NC}"
     echo "├─ Remote Dynamic Dependencies: $RDD_COUNT"
     echo "├─ Known Malicious Packages: $MALICIOUS_PKG_COUNT"
+    echo "├─ Compromised Versions: $VERSION_MATCH_COUNT"
+    echo "├─ Shai-Hulud Artifacts: $SHAI_HULUD_ARTIFACT_COUNT"
+    echo "├─ Workflow Injections: $WORKFLOW_INJECTION_COUNT"
     echo "├─ Suspicious Lifecycle Scripts: $SUSPICIOUS_SCRIPT_COUNT"
     
     if [ "$DEEP_SCAN" = true ]; then
@@ -1151,7 +1544,48 @@ generate_report() {
     
     echo ""
     
-    # Detailed findings
+    # Detailed findings - Shai-Hulud 2.0 specific
+    if [ -s "$SHAI_HULUD_FINDINGS" ]; then
+        echo -e "${RED}${BOLD}🪱 Shai-Hulud 2.0 Artifacts:${NC}"
+        echo "════════════════════════════════════════"
+        while IFS='|' read -r severity file pattern desc campaign; do
+            [ -z "$severity" ] && continue
+            echo -e "${RED}[CRITICAL]${NC} $pattern"
+            echo "  File: $file"
+            echo "  Description: $desc"
+            echo ""
+        done < "$SHAI_HULUD_FINDINGS"
+    fi
+    
+    if [ -s "$VERSION_FINDINGS" ]; then
+        echo -e "${RED}${BOLD}🪱 Compromised Package Versions:${NC}"
+        echo "════════════════════════════════════════"
+        while IFS='|' read -r severity file pkg version campaign; do
+            [ -z "$severity" ] && continue
+            echo -e "${RED}[CRITICAL]${NC} $pkg@$version"
+            echo "  File: $file"
+            echo "  Campaign: $campaign"
+            echo ""
+        done < "$VERSION_FINDINGS"
+    fi
+    
+    if [ -s "$WORKFLOW_FINDINGS" ]; then
+        echo -e "${RED}${BOLD}🪱 GitHub Actions Workflow Issues:${NC}"
+        echo "════════════════════════════════════════"
+        while IFS='|' read -r severity file pattern desc campaign; do
+            [ -z "$severity" ] && continue
+            if [ "$severity" = "CRITICAL" ]; then
+                echo -e "${RED}[CRITICAL]${NC} $pattern"
+            else
+                echo -e "${YELLOW}[WARNING]${NC} $pattern"
+            fi
+            echo "  File: $file"
+            echo "  Issue: $desc"
+            echo ""
+        done < "$WORKFLOW_FINDINGS"
+    fi
+    
+    # Original PhantomRaven findings
     if [ -s "$RDD_FINDINGS" ]; then
         echo -e "${RED}${BOLD}🚨 Remote Dynamic Dependencies:${NC}"
         echo "════════════════════════════════════════"
@@ -1171,10 +1605,12 @@ generate_report() {
     if [ -s "$MALICIOUS_FINDINGS" ]; then
         echo -e "${RED}${BOLD}🚨 Known Malicious Packages:${NC}"
         echo "════════════════════════════════════════"
-        while IFS='|' read -r severity file pkg version; do
+        while IFS='|' read -r severity file pkg version match_type extra; do
             [ -z "$severity" ] && continue
             echo -e "${RED}[CRITICAL]${NC} $pkg@$version"
             echo "  File: $file"
+            echo "  Match Type: $match_type"
+            [ -n "$extra" ] && echo "  Namespace: $extra"
             echo ""
         done < "$MALICIOUS_FINDINGS"
     fi
@@ -1184,7 +1620,11 @@ generate_report() {
         echo "════════════════════════════════════════"
         head -20 "$SUSPICIOUS_SCRIPTS" | while IFS='|' read -r severity file pkg script content extra; do
             [ -z "$severity" ] && continue
-            echo -e "${YELLOW}[WARNING]${NC} $pkg - $script"
+            if [ "$severity" = "CRITICAL" ]; then
+                echo -e "${RED}[CRITICAL]${NC} $pkg - $script"
+            else
+                echo -e "${YELLOW}[WARNING]${NC} $pkg - $script"
+            fi
             echo "  File: $file"
             echo "  Content: $content"
             [ -n "$extra" ] && echo "  Note: $extra"
@@ -1209,10 +1649,22 @@ generate_report() {
     echo ""
     echo -e "${BOLD}═══════════════════════════════════════════════════════════${NC}"
     
+    local has_shai_hulud=false
+    if [ "$VERSION_MATCH_COUNT" -gt 0 ] || [ "$SHAI_HULUD_ARTIFACT_COUNT" -gt 0 ] || [ "$WORKFLOW_INJECTION_COUNT" -gt 0 ]; then
+        has_shai_hulud=true
+    fi
+    
     if [ "$MALICIOUS_PKG_COUNT" -gt 0 ] || \
+       [ "$has_shai_hulud" = true ] || \
        ([ "$RDD_COUNT" -gt 0 ] && [ -f "$RDD_FINDINGS" ] && grep -q "CRITICAL" "$RDD_FINDINGS" 2>/dev/null); then
         echo -e "${RED}${BOLD}🚨 CRITICAL: MALWARE DETECTED!${NC}"
         echo ""
+        
+        if [ "$has_shai_hulud" = true ]; then
+            echo -e "${MAGENTA}${BOLD}Campaign Detected: SHAI-HULUD 2.0${NC}"
+            echo ""
+        fi
+        
         echo "IMMEDIATE ACTIONS REQUIRED:"
         echo "1. DO NOT run npm install"
         echo "2. Disconnect this machine from network"
@@ -1222,8 +1674,19 @@ generate_report() {
         echo "   - CI/CD secrets (GitHub Actions, GitLab, Jenkins, CircleCI)"
         echo "4. Check ~/.gitconfig and ~/.npmrc for exposure"
         echo "5. Review git audit logs for unauthorized activity"
-        echo "6. Scan system for other malware"
-        echo "7. Consider this machine compromised"
+        
+        if [ "$has_shai_hulud" = true ]; then
+            echo ""
+            echo -e "${MAGENTA}SHAI-HULUD 2.0 SPECIFIC ACTIONS:${NC}"
+            echo "6. Check GitHub for self-hosted runners named 'SHA1HULUD'"
+            echo "7. Review .github/workflows for discussion.yaml or formatter_*.yml"
+            echo "8. Audit GitHub Discussions for suspicious content"
+            echo "9. Check for exfiltration to webhook.site"
+            echo "10. Review Actions artifacts for secret dumps"
+        fi
+        
+        echo ""
+        echo "Consider this machine compromised"
         
         return 1
     elif [ "$RDD_COUNT" -gt 0 ] || [ "$SUSPICIOUS_SCRIPT_COUNT" -gt 0 ]; then
@@ -1239,7 +1702,9 @@ generate_report() {
     else
         echo -e "${GREEN}${BOLD}✓ No critical threats detected${NC}"
         echo ""
-        echo "Your npm projects appear clean based on known PhantomRaven indicators."
+        echo "Your npm projects appear clean based on known indicators for:"
+        echo "  - PhantomRaven (Aug-Oct 2025)"
+        echo "  - Shai-Hulud 2.0 (Nov 2025+)"
         echo ""
         if [ "$DEEP_SCAN" = false ]; then
             echo "💡 Tip: Run with --deep or --paranoid for more thorough scanning"
@@ -1290,7 +1755,7 @@ parse_arguments() {
                 exit 0
                 ;;
             --version)
-                echo "PhantomRaven Hunter v${VERSION}"
+                echo "npm-threat-hunter v${VERSION}"
                 exit 0
                 ;;
             -*)
@@ -1342,8 +1807,11 @@ main() {
     if [ "$DRY_RUN" = true ]; then
         log_info "DRY RUN MODE - No actual scanning will be performed"
         log_info "The following checks would be executed:"
-        echo "  ✓ Remote Dynamic Dependencies" >&$target_stream
+        echo "  ✓ Remote Dynamic Dependencies (PhantomRaven)" >&$target_stream
         echo "  ✓ Known Malicious Packages" >&$target_stream
+        echo "  ✓ Compromised Package Versions (Shai-Hulud 2.0)" >&$target_stream
+        echo "  ✓ Shai-Hulud Artifact Files" >&$target_stream
+        echo "  ✓ GitHub Actions Workflow Injection" >&$target_stream
         echo "  ✓ Lifecycle Scripts Analysis" >&$target_stream
         echo "  ✓ Malicious Domain Scan" >&$target_stream
         [ "$DEEP_SCAN" = true ] && echo "  ✓ Credential Theft Patterns" >&$target_stream
@@ -1362,6 +1830,9 @@ main() {
     # Run detection functions
     detect_rdd
     detect_malicious_packages
+    detect_compromised_versions
+    detect_shai_hulud_artifacts
+    detect_workflow_injections
     analyze_lifecycle_scripts
     scan_for_malicious_domains
     

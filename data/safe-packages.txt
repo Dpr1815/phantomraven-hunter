@@ -1,6 +1,6 @@
 # Safe Packages Whitelist
 # These packages are known to have legitimate install scripts
-# Last Updated: 2025-11-04
+# Last Updated: 2025-12-01
 # Format: package_name
 
 # Build tools that download platform-specific binaries
